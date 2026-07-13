@@ -1,0 +1,9 @@
+# Local environment / secrets
+.env
+
+# macOS
+.DS_Store
+
+# Go build output
+/game-library-auto-sync
+*.exe
