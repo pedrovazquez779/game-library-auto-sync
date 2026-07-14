@@ -478,18 +478,23 @@ func (p *progress) finish() {
 
 // ---------- Sync ----------
 
-func runSync(steamKey, steamID string, notion *notionClient) {
+// runSync performs one full sync. It returns a non-nil error only when the
+// sync aborted before upserting (bad credentials, schema mismatch, Notion
+// unreachable); loop mode ignores it and retries on the next tick, while
+// -once mode uses it as the exit code so schedulers (cron, GitHub Actions)
+// can flag the failure.
+func runSync(steamKey, steamID string, notion *notionClient) error {
 	start := time.Now()
 	log.Println("sync: starting")
 
 	games, err := fetchOwnedGames(steamKey, steamID)
 	if err != nil {
 		log.Printf("sync aborted: %v", err)
-		return
+		return err
 	}
 	if err := notion.resolveSchema(); err != nil {
 		log.Printf("sync aborted: %v", err)
-		return
+		return err
 	}
 	log.Printf("schema resolved: hours=%q recent=%q lastPlayed=%q status=%q",
 		notion.props.Hours, notion.props.Recent, notion.props.LastPlayed, notion.props.Status)
@@ -501,7 +506,7 @@ func runSync(steamKey, steamID string, notion *notionClient) {
 	existing, err := notion.loadExisting()
 	if err != nil {
 		log.Printf("sync aborted: %v", err)
-		return
+		return err
 	}
 	log.Printf("steam: %d games | notion: %d pages indexed", len(games), len(existing))
 
@@ -548,6 +553,37 @@ func runSync(steamKey, steamID string, notion *notionClient) {
 	bar.finish()
 	log.Printf("sync: completed in %s — created %d, updated %d, unchanged %d, covers fixed %d, errors %d",
 		time.Since(start).Round(time.Second), created, updated, skipped, fixedCovers, failed)
+	return nil
+}
+
+// loadDotEnv loads KEY=VALUE pairs from a .env file in the working directory,
+// so a downloaded binary works by dropping a .env next to it — no shell
+// exports needed. Real environment variables always win over the file.
+func loadDotEnv() {
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		return // no .env is the normal case on servers and CI
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+			value = value[1 : len(value)-1]
+		}
+		if key == "" || os.Getenv(key) != "" {
+			continue
+		}
+		os.Setenv(key, value)
+	}
+	log.Printf("loaded credentials from .env")
 }
 
 func mustEnv(key string) string {
@@ -559,6 +595,8 @@ func mustEnv(key string) string {
 }
 
 func main() {
+	loadDotEnv()
+
 	// -once: sync a single time and exit, instead of looping on the ticker.
 	// Handy for local runs, cron, or CI schedulers (e.g. GitHub Actions).
 	// Also enabled via SYNC_ONCE=true for env-only environments.
@@ -576,8 +614,11 @@ func main() {
 		http:  &http.Client{Timeout: 30 * time.Second},
 	}
 
-	runSync(steamKey, steamID, notion) // immediate sync on startup
+	err := runSync(steamKey, steamID, notion) // immediate sync on startup
 	if *once {
+		if err != nil {
+			os.Exit(1) // let schedulers (cron, GitHub Actions) see the failure
+		}
 		return
 	}
 

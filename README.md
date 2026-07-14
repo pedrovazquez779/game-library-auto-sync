@@ -38,31 +38,45 @@ English and Spanish templates (see [Database schema](#database-schema)).
 
 ## Quick start (local)
 
-You need Go 1.22+ installed and a Steam account with a **public** profile.
+You need a Steam account with a **public** profile and your 4 credentials
+(see [Credentials](#credentials)). Then pick whichever option suits you.
+
+### Option A — prebuilt binary (no Go needed)
+
+1. Download the file for your OS from the
+   [**Releases page**](../../releases/latest).
+2. Create a `.env` file **in the same folder** with your credentials (copy the
+   contents of [`.env.example`](.env.example)) — the binary picks it up
+   automatically.
+3. Run it from a terminal:
 
 ```bash
-git clone <this-repo>
-cd notion-steam
+./game-library-auto-sync_macos_apple_silicon -once   # macOS / Linux
+game-library-auto-sync_windows.exe -once             # Windows
+```
+
+> **macOS:** the binaries are unsigned, so Gatekeeper blocks the first run.
+> Either right-click the file → **Open** (once is enough), or clear the
+> quarantine flag: `xattr -d com.apple.quarantine ./game-library-auto-sync_*`.
+
+### Option B — from source (Go 1.22+)
+
+```bash
+git clone https://github.com/pedrovazquez779/game-library-auto-sync.git
+cd game-library-auto-sync
 cp .env.example .env      # then fill in your 4 credentials (see below)
 make run-once             # sync once and exit
 ```
 
-That's it — your Notion database fills up in one pass. Run `make run-once`
-whenever you want to refresh it.
+Either way, your Notion database fills up in one pass. Re-run whenever you want
+to refresh it — or set up [automatic syncing](#keeping-it-in-sync-automatically).
 
-Two run modes:
+Two run modes, whichever option you chose:
 
-| Command         | Behaviour                                                      |
-|-----------------|---------------------------------------------------------------|
-| `make run-once` | Sync a single time and exit. Best for manual runs and cron/CI. |
-| `make run`      | Sync now, then keep running and re-sync every `SYNC_INTERVAL_HOURS` (default 6). Best for a machine that's always on. |
-
-Without the Makefile you can run it directly (env vars must be set in your shell):
-
-```bash
-go run . -once     # single sync
-go run .           # loop forever
-```
+| Mode              | Behaviour                                                      |
+|-------------------|---------------------------------------------------------------|
+| `-once` flag (`make run-once`) | Sync a single time and exit. Best for manual runs and cron/CI. |
+| no flag (`make run`) | Sync now, then keep running and re-sync every `SYNC_INTERVAL_HOURS` (default 6). Best for a machine that's always on. |
 
 `-once` is also available as `SYNC_ONCE=true` for environments where passing a
 flag is awkward (schedulers, containers).
@@ -143,6 +157,12 @@ Two GitHub quirks to know about:
 - Scheduled runs can start a few minutes late — GitHub queues them best-effort.
 - On public repos, GitHub **pauses schedules after 60 days without commits**.
   It emails you first; one click ("Enable workflow") — or any commit — resumes it.
+
+### Your own computer
+
+Run the binary with no flag (loop mode) and leave it open — it re-syncs every
+`SYNC_INTERVAL_HOURS` while your machine is on. Or schedule the `-once` mode
+yourself with `cron` (macOS/Linux) or Task Scheduler (Windows).
 
 ### Railway / a small VPS (advanced)
 

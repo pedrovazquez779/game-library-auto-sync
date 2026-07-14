@@ -1,0 +1,40 @@
+# Builds prebuilt binaries for every OS and attaches them to a GitHub Release,
+# so users can run the sync without installing Go.
+# Trigger: push a tag like v1.0.0 (git tag v1.0.0 && git push origin v1.0.0).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build for every OS
+        run: |
+          mkdir dist
+          build() { # build <GOOS> <GOARCH> <friendly-suffix>
+            ext=""
+            [ "$1" = "windows" ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$1" GOARCH="$2" go build -trimpath -ldflags "-s -w" \
+              -o "dist/game-library-auto-sync_$3$ext" .
+          }
+          build windows amd64 windows
+          build darwin  arm64 macos_apple_silicon
+          build darwin  amd64 macos_intel
+          build linux   amd64 linux_amd64
+          build linux   arm64 linux_arm64
+          ls -lh dist
+      - name: Create the release with the binaries attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
