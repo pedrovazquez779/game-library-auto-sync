@@ -123,12 +123,32 @@ table sorted by hours, a board grouped by `Status`.
 
 `make run-once` is manual by design. For a hands-off refresh you have two options:
 
-- **GitHub Actions (recommended, no server, no card).** Fork the repo, add your 4
-  credentials as repository secrets, and run `go run . -once` on a schedule.
-  *(A ready-made workflow file is coming soon.)*
-- **Railway / a small VPS (advanced).** Deploy `make run` as a 24/7 process.
-  Nixpacks auto-detects Go from `go.mod`, no Dockerfile needed. Uses ~10–15 MB of
-  RAM. Set the 4 credentials as environment variables.
+### GitHub Actions (recommended — no server, no card)
+
+The repo ships with a ready-made workflow
+([`.github/workflows/sync.yml`](.github/workflows/sync.yml)) that runs
+`go run . -once` every 6 hours on GitHub's free runners.
+
+1. **Fork this repo** (a fork is enough — you don't need to change any code).
+2. In your fork: **Settings → Secrets and variables → Actions → New repository
+   secret**, and add the 4 credentials: `STEAM_API_KEY`, `STEAM_ID64`,
+   `NOTION_TOKEN`, `NOTION_DB_ID`.
+3. Open the **Actions** tab and click **"I understand my workflows, go ahead and
+   enable them"** — GitHub disables scheduled workflows in forks by default.
+4. Test it: Actions → **Sync** → **Run workflow**. A green run means your Notion
+   database is now updating itself.
+
+Two GitHub quirks to know about:
+
+- Scheduled runs can start a few minutes late — GitHub queues them best-effort.
+- On public repos, GitHub **pauses schedules after 60 days without commits**.
+  It emails you first; one click ("Enable workflow") — or any commit — resumes it.
+
+### Railway / a small VPS (advanced)
+
+Deploy `make run` as a 24/7 process. Nixpacks auto-detects Go from `go.mod`, no
+Dockerfile needed. Uses ~10–15 MB of RAM. Set the 4 credentials as environment
+variables.
 
 ---
 
